@@ -114,44 +114,6 @@ def check_posts_vk():
         text = '\n'.join([text] + links)
         send_posts_text(text)
 
-        if len(images) > 0:
-            image_urls = list(map(lambda img: max(
-                img["sizes"], key=lambda size: size["type"])["url"], images))
-            print(image_urls)
-            bot.send_media_group(CHANNEL, map(
-                lambda url: InputMediaPhoto(url), image_urls))
-
-        # Проверяем есть ли репост другой записи
-        if 'copy_history' in post:
-            copy_history = post['copy_history']
-            copy_history = copy_history[0]
-            print('--copy_history--')
-            print(copy_history)
-            text = copy_history['text']
-            send_posts_text(text)
-
-            # Проверяем есть ли у репоста прикрепленное сообщение
-            if 'attachments' in copy_history:
-                copy_add = copy_history['attachments']
-                copy_add = copy_add[0]
-
-                # Если это ссылка
-                if copy_add['type'] == 'link':
-                    link = copy_add['link']
-                    text = link['title']
-                    send_posts_text(text)
-                    img = link['photo']
-                    send_posts_img(img)
-                    url = link['url']
-                    send_posts_text(url)
-
-                # Если это картинки
-                if copy_add['type'] == 'photo':
-                    attach = copy_history['attachments']
-                    for img in attach:
-                        image = img['photo']
-                        send_posts_img(image)
-
         # Записываем id в файл
         config.set('Settings', 'LAST_ID', str(post['id']))
         with open(config_path, "w") as config_file:
@@ -162,9 +124,8 @@ def check_posts_vk():
 message_breakers = [':', ' ', '\n']
 max_message_length = 4091
 
+
 # Текст
-
-
 def send_posts_text(text):
     global CHANNEL
     global PREVIEW_LINK
@@ -191,15 +152,6 @@ def split(text):
         return [good_part] + split(bad_part)
     else:
         return [text]
-
-
-# Изображения
-def send_posts_img(img):
-    global bot
-
-    # Находим картинку с максимальным качеством
-    url = max(img["sizes"], key=lambda size: size["type"])["url"]
-    bot.send_photo(CHANNEL, url)
 
 
 if __name__ == '__main__':
