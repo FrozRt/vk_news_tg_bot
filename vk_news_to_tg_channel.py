@@ -3,7 +3,7 @@ import sys
 import vk_api
 import telebot
 import configparser
-from telebot.types import InputMediaPhoto
+from time import sleep
 
 
 config_path = os.path.join(sys.path[0], 'settings.ini')
@@ -11,7 +11,8 @@ config = configparser.ConfigParser()
 config.read(config_path)
 LOGIN = config.get('VK', 'VK_LOGIN')
 PASSWORD = config.get('VK', 'VK_PASSWORD')
-DOMAIN = config.get('VK', 'VK_DOMAIN')
+DOMAIN0 = (config.get('VK', 'VK_DOMAIN')).split(', ')
+LAST_ID0 = (config.get('Settings', 'LAST_ID')).split(', ')
 COUNT = config.get('VK', 'VK_ARTICLES_COUNT')
 BOT_TOKEN = config.get('Telegram', 'BOT_TOKEN')
 CHANNEL = config.get('Telegram', 'TG_CHANNEL')
@@ -35,9 +36,22 @@ def auth_handler():
     return key, remember_device
 
 # Получаем данные из vk.com
+def vk_news_sender():
+    i = 0
+    temp_container_for_last_ids = []
+    while i < len(DOMAIN0):
+        DOMAIN = DOMAIN0[i]
+        LAST_ID = int(LAST_ID0[i].strip("''"))
+        check_posts_vk(DOMAIN, LAST_ID)
+        sleep(0.5)
+        i += 1
+        temp_container_for_last_ids.append(config.get('Settings', 'LAST_ID'))
+    config.set('Settings', 'LAST_ID', str(temp_container_for_last_ids).strip('[]'))
+    with open(config_path, "w") as config_file:
+        config.write(config_file)
 
 
-def get_data(domain_vk, count_vk):
+def get_data(domain_vk, vk_articles_count):
     global LOGIN
     global PASSWORD
     global VK_TOKEN
@@ -60,23 +74,25 @@ def get_data(domain_vk, count_vk):
 
     vk = vk_session.get_api()
     # Используем метод wall.get из документации по API vk.com
-    response = vk.wall.get(domain=domain_vk, count=count_vk)
+    response = vk.wall.get(domain=domain_vk, count=vk_articles_count)
     return response
 
 
-# Проверяем данные по условиям перед отправкой
-def check_posts_vk():
+#  Проверяем данные по условиям перед отправкой
+def check_posts_vk(DOMAIN, LAST_ID):
     response = get_data(DOMAIN, COUNT)
     print(response)
     response = reversed(response['items'])
 
     for post in response:
-
-        # Читаем последний извесный id из файла
-        id = config.get('Settings', 'LAST_ID')
-
         # Сравниваем id, пропускаем уже опубликованные
-        if int(post['id']) <= int(id):
+        if 'is_pinned' in post:
+            print(f"The post {post['id']} is pinned")
+            continue
+        if int(post['id']) <= LAST_ID:
+            config.set('Settings', 'LAST_ID', str(post['id']))
+            with open(config_path, "w") as config_file:
+                config.write(config_file)
             continue
 
         print('-----------------------------------------')
@@ -155,4 +171,4 @@ def split(text):
 
 
 if __name__ == '__main__':
-    check_posts_vk()
+    vk_news_sender()
