@@ -11,15 +11,15 @@ config = configparser.ConfigParser()
 config.read(config_path)
 LOGIN = config.get('VK', 'VK_LOGIN')
 PASSWORD = config.get('VK', 'VK_PASSWORD')
-DOMAIN0 = (config.get('VK', 'VK_DOMAIN')).split(', ')
-LAST_ID0 = (config.get('Settings', 'LAST_ID')).split(', ')
+DOMAIN_LIST = (config.get('VK', 'VK_DOMAIN')).split(', ')
+LAST_ID_LIST = (config.get('Settings', 'LAST_ID')).split(', ')
 COUNT = config.get('VK', 'VK_ARTICLES_COUNT')
 BOT_TOKEN = config.get('Telegram', 'BOT_TOKEN')
 CHANNEL = config.get('Telegram', 'TG_CHANNEL')
 INCLUDE_LINK = config.getboolean('Settings', 'INCLUDE_LINK')
 PREVIEW_LINK = config.getboolean('Settings', 'PREVIEW_LINK')
 VK_TOKEN = config.get('VK', 'TOKEN', fallback=None)
-
+temp_container_for_last_ids = []
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -35,17 +35,16 @@ def auth_handler():
 
     return key, remember_device
 
+
 # Получаем данные из vk.com
 def vk_news_sender():
     i = 0
-    temp_container_for_last_ids = []
-    while i < len(DOMAIN0):
-        DOMAIN = DOMAIN0[i]
-        LAST_ID = int(LAST_ID0[i].strip("''"))
+    while i < len(DOMAIN_LIST):
+        DOMAIN = DOMAIN_LIST[i]
+        LAST_ID = int(LAST_ID_LIST[i].strip("''"))
         check_posts_vk(DOMAIN, LAST_ID)
         sleep(0.5)
         i += 1
-        temp_container_for_last_ids.append(config.get('Settings', 'LAST_ID'))
     config.set('Settings', 'LAST_ID', str(temp_container_for_last_ids).strip('[]'))
     with open(config_path, "w") as config_file:
         config.write(config_file)
@@ -58,20 +57,8 @@ def get_data(domain_vk, vk_articles_count):
     global config
     global config_path
 
-    if VK_TOKEN is not None:
-        vk_session = vk_api.VkApi(LOGIN, PASSWORD, VK_TOKEN)
-        vk_session.auth(token_only=True)
-    else:
-        vk_session = vk_api.VkApi(LOGIN, PASSWORD, auth_handler=auth_handler)
-        vk_session.auth()
-
-    new_token = vk_session.token['access_token']
-    if VK_TOKEN != new_token:
-        VK_TOKEN = new_token
-        config.set('VK', 'TOKEN', new_token)
-        with open(config_path, "w") as config_file:
-            config.write(config_file)
-
+    vk_session = vk_api.VkApi(LOGIN, PASSWORD, VK_TOKEN)
+    vk_session.auth(token_only=True)
     vk = vk_session.get_api()
     # Используем метод wall.get из документации по API vk.com
     response = vk.wall.get(domain=domain_vk, count=vk_articles_count)
@@ -80,21 +67,21 @@ def get_data(domain_vk, vk_articles_count):
 
 #  Проверяем данные по условиям перед отправкой
 def check_posts_vk(DOMAIN, LAST_ID):
+    global temp_container_for_last_ids
     response = get_data(DOMAIN, COUNT)
     print(response)
     response = reversed(response['items'])
-
+    temp_post_id_list = []
     for post in response:
         # Сравниваем id, пропускаем уже опубликованные
         if 'is_pinned' in post:
             print(f"The post {post['id']} is pinned")
+            temp_post_id_list.append(post['id'])
             continue
         if int(post['id']) <= LAST_ID:
-            config.set('Settings', 'LAST_ID', str(post['id']))
-            with open(config_path, "w") as config_file:
-                config.write(config_file)
+            temp_post_id_list.append(post['id'])
             continue
-
+        temp_post_id_list.append(post['id'])
         print('-----------------------------------------')
         print(post)
 
@@ -129,12 +116,7 @@ def check_posts_vk(DOMAIN, LAST_ID):
             links.insert(0, post_url)
         text = '\n'.join([text] + links)
         send_posts_text(text)
-
-        # Записываем id в файл
-        config.set('Settings', 'LAST_ID', str(post['id']))
-        with open(config_path, "w") as config_file:
-            config.write(config_file)
-
+    temp_container_for_last_ids.append(max(temp_post_id_list))
 
 # Символы, на которых можно разбить сообщение
 message_breakers = [':', ' ', '\n']
