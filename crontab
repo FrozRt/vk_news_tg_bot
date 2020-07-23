@@ -1,0 +1,2 @@
+0 * * * * cd /home/frozrt/vk_news_tg_bot && . ./bot_env/bin/activate && python vk_news_to_tg_channel.py >/dev/null 2>&1
+
